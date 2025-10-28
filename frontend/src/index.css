@@ -1,0 +1,6 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+/* Make the native clear (cancel) button use a pointer cursor */
+input[type="search"]::-webkit-search-cancel-button {
+  cursor: pointer;
+}
