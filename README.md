@@ -10,6 +10,7 @@
 **Create & Edit Posts** — Share your thoughts or project updates  
 **Interactive Reactions** — Like, Love, or React with emojis 💡🔥❤️  
 **Comment System** — Engage with other developers’ posts  
+**Multilingual System** — Engage with Multiple Language for posts, comments, reply and static data etc Through Lingo.dev
 **Theme Toggle** — Switch between Light and Dark mode  
 **Responsive UI** — Works perfectly on desktop & mobile  
 **Real-time Updates** — All data synced via Appwrite Database API  
