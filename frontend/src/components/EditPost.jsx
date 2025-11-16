@@ -3,6 +3,7 @@ import { useNavigate, useParams, Link } from "react-router-dom";
 import { databases } from "../appwrite/appwriteConfig";
 import { AuthContext } from "../context/AuthContextValue";
 import { Loader2, PenSquare, ArrowLeft, Save } from "lucide-react";
+import { translateText } from "../utils/geminiTranslate"; // Gemini translation util
 
 function EditPost() {
   const { id } = useParams();
@@ -12,7 +13,6 @@ function EditPost() {
   const [formData, setFormData] = useState({
     title: "",
     content: "",
-    // image: null, // not needed for now
   });
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
@@ -27,15 +27,13 @@ function EditPost() {
           id
         );
 
-        //  Prefill form fields
         setFormData({
           title: post.title || "",
           content: post.content || "",
-          // image: post.image || null, //  commented
         });
       } catch (error) {
         console.error("Failed to load post:", error);
-        alert(" Failed to load post for editing.");
+        alert("Failed to load post for editing.");
       } finally {
         setLoading(false);
       }
@@ -44,35 +42,60 @@ function EditPost() {
     fetchPost();
   }, [id]);
 
-  //  Handle input change
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  //  Save changes to Appwrite
   const handleSubmit = async (e) => {
     e.preventDefault();
     setUpdating(true);
 
     try {
-      //  Only update title and content for now
+      const { title, content } = formData;
+
+      // Generate translations for updated post
+      const [
+        title_ur, content_ur,
+        title_hi, content_hi,
+        title_es, content_es,
+        title_ar, content_ar
+      ] = await Promise.all([
+        translateText(title, "Urdu"),
+        translateText(content, "Urdu"),
+        translateText(title, "Hindi"),
+        translateText(content, "Hindi"),
+        translateText(title, "Spanish"),
+        translateText(content, "Spanish"),
+        translateText(title, "Arabic"),
+        translateText(content, "Arabic"),
+      ]);
+
+      const truncate = (text, max = 255) => (text ? text.slice(0, max) : "");
+
       await databases.updateDocument(
         import.meta.env.VITE_APPWRITE_DATABASE_ID,
         import.meta.env.VITE_APPWRITE_POSTS_COLLECTION_ID,
         id,
         {
-          title: formData.title,
-          content: formData.content,
-          // image: formData.image,  not needed for now
+          title: truncate(title),
+          content,
+          title_ur: truncate(title_ur),
+          content_ur,
+          title_hi: truncate(title_hi),
+          content_hi,
+          title_es: truncate(title_es),
+          content_es,
+          title_ar: truncate(title_ar),
+          content_ar,
         }
       );
 
-      alert(" Post updated successfully!");
+      alert("Post updated successfully with translations!");
       navigate(`/post/${id}`);
     } catch (error) {
       console.error("Failed to update post:", error);
-      alert(" Failed to update post. Please try again.");
+      alert("Failed to update post. Please try again.");
     } finally {
       setUpdating(false);
     }
@@ -89,7 +112,6 @@ function EditPost() {
   return (
     <div className="min-h-screen pt-20 pb-12 px-4 bg-gradient-to-br from-indigo-50 to-pink-50 dark:from-gray-900 dark:to-gray-800">
       <div className="max-w-3xl mx-auto">
-        {/* Back Button */}
         <Link
           to={`/post/${id}`}
           className="inline-flex items-center mb-6 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
@@ -99,7 +121,6 @@ function EditPost() {
         </Link>
 
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
-          {/* Header Section */}
           <div className="p-6 sm:p-8 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center gap-4 mb-6">
               <div className="p-3 rounded-full bg-indigo-100 dark:bg-indigo-900/30">
@@ -116,9 +137,7 @@ function EditPost() {
             </div>
           </div>
 
-          {/* Form Section */}
           <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-6">
-            {/* Title Field */}
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Title
@@ -138,7 +157,6 @@ function EditPost() {
               />
             </div>
 
-            {/* Content Field */}
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Content
@@ -158,15 +176,13 @@ function EditPost() {
               ></textarea>
             </div>
 
-            {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
               <button
                 type="button"
                 onClick={() => navigate(`/post/${id}`)}
                 className="px-6 py-3 rounded-lg border border-gray-300 dark:border-gray-600 
                   text-gray-700 dark:text-gray-300 font-medium
-                  hover:bg-gray-50 dark:hover:bg-gray-700/50
-                  transition-all duration-200 order-2 sm:order-1 cursor-pointer"
+                  hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all duration-200 order-2 sm:order-1 cursor-pointer"
               >
                 Cancel
               </button>

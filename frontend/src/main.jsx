@@ -1,10 +1,15 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App.jsx'
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import App from "./App.jsx";
+import "./index.css";
 
-createRoot(document.getElementById('root')).render(
+// Lingo.dev Compiler runtime wrapper
+import { LingoProviderWrapper, loadDictionary } from "lingo.dev/react/client";
+
+createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <App />
-  </StrictMode>,
-)
+    <LingoProviderWrapper loadDictionary={(locale) => loadDictionary(locale)}>
+      <App />
+    </LingoProviderWrapper>
+  </StrictMode>
+);

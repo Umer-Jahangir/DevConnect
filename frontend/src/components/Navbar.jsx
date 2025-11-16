@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { AuthContext } from "../context/AuthContextValue";
 import NotificationDropdown from "./NotificationDropdown";
 import SearchBar from "./SearchBar";
+import LanguageSwitcher from "./LanguageSwitcher";
 import { 
   Menu, 
   X, 
@@ -89,12 +90,19 @@ const Navbar = () => {
           {user && (
             <Link
               to="/create"
-              className="hidden md:flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition cursor-pointer"
+              className="hidden md:flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition cursor-pointer space-x-6"
             >
               <Edit size={18} className="mr-2" />
               Create Post
             </Link>
           )}
+
+          {/* Language Switcher */}
+          <div
+            className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg cursor-pointer"
+            >
+            <LanguageSwitcher />
+          </div>
 
           {/*  Right Section */}
           <div className="flex items-center space-x-4">

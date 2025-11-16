@@ -3,38 +3,61 @@ import { AuthContext } from "../context/AuthContextValue";
 import { databases, client, ID, Query } from "../appwrite/appwriteConfig";
 import { MessageSquare, Reply, MoreVertical } from "lucide-react";
 import ReactionButtons from "../components/ReactionButtons";
+import { translateText } from "../utils/geminiTranslate";
 
-/* 🔔 Helper function to create notification documents */
+// 🔔 Create notification
 const createNotification = async (targetUserId, type, message, link) => {
   const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID;
-  const NOTIFICATION_COLLECTION_ID = import.meta.env
-    .VITE_APPWRITE_NOTIFICATIONS_COLLECTION_ID;
+  const NOTIFICATION_COLLECTION_ID =
+    import.meta.env.VITE_APPWRITE_NOTIFICATIONS_COLLECTION_ID;
 
   try {
-    await databases.createDocument(
-      DATABASE_ID,
-      NOTIFICATION_COLLECTION_ID,
-      ID.unique(),
-      {
-        userId: targetUserId,
-        type,
-        message,
-        link,
-        createdAt: new Date().toISOString(),
-        isRead: false,
-      }
-    );
-    console.log("🔔 Notification created:", message);
+    await databases.createDocument(DATABASE_ID, NOTIFICATION_COLLECTION_ID, ID.unique(), {
+      userId: targetUserId,
+      type,
+      message,
+      link,
+      createdAt: new Date().toISOString(),
+      isRead: false,
+    });
   } catch (err) {
     console.error("❌ Error creating notification:", err);
   }
 };
 
-const CommentItem = ({ comment, replies, onReply, onDelete, onReact }) => {
+// 🔤 Get translated text
+const getTranslatedText = (commentDoc, selectedLang) => {
+  if (!commentDoc) return "";
+  switch (selectedLang) {
+    case "ur":
+      return commentDoc.comment_ur || commentDoc.comment_en || commentDoc.content;
+    case "hi":
+      return commentDoc.comment_hi || commentDoc.comment_en || commentDoc.content;
+    case "es":
+      return commentDoc.comment_es || commentDoc.comment_en || commentDoc.content;
+    case "ar":
+      return commentDoc.comment_ar || commentDoc.comment_en || commentDoc.content;
+    default:
+      return commentDoc.comment_en || commentDoc.content;
+  }
+};
+
+// 📝 Comment Item
+const CommentItem = ({
+  comment,
+  replies,
+  onReply,
+  onDelete,
+  onReact,
+  commentLangs,
+  onSelectLang,
+}) => {
   const { user } = useContext(AuthContext);
   const [showReplyForm, setShowReplyForm] = useState(false);
   const [replyContent, setReplyContent] = useState("");
   const [showOptions, setShowOptions] = useState(false);
+
+  const selectedLang = commentLangs[comment.$id] || "en";
 
   const handleReplySubmit = (e) => {
     e.preventDefault();
@@ -48,26 +71,44 @@ const CommentItem = ({ comment, replies, onReply, onDelete, onReact }) => {
     <div className="border-l-2 border-gray-200 dark:border-gray-700 pl-4 mb-4">
       <div className="flex justify-between items-start gap-4">
         <div className="flex-1">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
-              <span className="text-indigo-600 dark:text-indigo-400 font-medium">
-                {comment.authorEmail[0].toUpperCase()}
+          {/* Author Info */}
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-900/30 flex items-center justify-center">
+              <span className="text-gray-600 dark:text-gray-400 font-medium">
+                {comment.authorEmail?.[0]?.toUpperCase() || "U"}
               </span>
             </div>
             <div>
-              <p className="font-medium text-gray-900 dark:text-white">
-                {comment.authorEmail}
-              </p>
+              <p className="font-medium text-gray-900 dark:text-white">{comment.authorEmail}</p>
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {new Date(comment.$createdAt).toLocaleDateString()}
               </p>
             </div>
           </div>
 
-          <p className="text-gray-700 dark:text-gray-300 mb-2">
-            {comment.content}
+          {/* Language Selector */}
+          <div className="flex gap-2 mb-2">
+            {["en", "ur", "hi", "es", "ar"].map((lang) => (
+              <button
+                key={lang}
+                onClick={() => onSelectLang(comment.$id, lang)}
+                className={`px-2 py-1 text-xs rounded border ${
+                  selectedLang === lang
+                    ? "bg-gray-600 text-white border-gray-600"
+                    : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 cursor-pointer"
+                }`}
+              >
+                {lang.toUpperCase()}
+              </button>
+            ))}
+          </div>
+
+          {/* Comment Text */}
+          <p className="text-gray-700 dark:text-gray-300 mb-2 whitespace-pre-wrap">
+            {getTranslatedText(comment, selectedLang)}
           </p>
 
+          {/* Reactions & Reply */}
           <div className="flex items-center gap-4">
             <ReactionButtons
               reactions={(() => {
@@ -84,15 +125,12 @@ const CommentItem = ({ comment, replies, onReply, onDelete, onReact }) => {
                   return {};
                 }
               })()}
-              onReact={(updatedReactions) =>
-                onReact(comment.$id, updatedReactions)
-              }
+              onReact={(updatedReactions) => onReact(comment.$id, updatedReactions)}
             />
 
             <button
-              onClick={() => setShowReplyForm(!showReplyForm)}
-              className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 
-                dark:hover:text-gray-300 flex items-center gap-1 cursor-pointer"
+              onClick={() => setShowReplyForm((s) => !s)}
+              className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 flex items-center gap-1 cursor-pointer"
             >
               <Reply size={14} />
               Reply
@@ -100,23 +138,20 @@ const CommentItem = ({ comment, replies, onReply, onDelete, onReact }) => {
           </div>
         </div>
 
+        {/* Delete Options */}
         {user && user.$id === comment.authorId && (
           <div className="relative">
             <button
-              onClick={() => setShowOptions(!showOptions)}
+              onClick={() => setShowOptions((s) => !s)}
               className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
             >
               <MoreVertical size={16} />
             </button>
             {showOptions && (
-              <div
-                className="absolute right-0 mt-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg 
-                border border-gray-200 dark:border-gray-700 py-1"
-              >
+              <div className="absolute right-0 mt-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1">
                 <button
                   onClick={() => onDelete(comment.$id)}
-                  className="w-full px-4 py-2 text-sm text-red-600 dark:text-red-400 
-                    hover:bg-gray-100 dark:hover:bg-gray-700 text-left cursor-pointer"
+                  className="w-full px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 text-left cursor-pointer"
                 >
                   Delete
                 </button>
@@ -126,18 +161,17 @@ const CommentItem = ({ comment, replies, onReply, onDelete, onReact }) => {
         )}
       </div>
 
+      {/* Reply Form */}
       {showReplyForm && (
-        <form onSubmit={handleReplySubmit} className="mt-4">
+        <form onSubmit={handleReplySubmit} className="mt-2">
           <textarea
             value={replyContent}
             onChange={(e) => setReplyContent(e.target.value)}
             placeholder="Write a reply..."
-            className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 
-              bg-white dark:bg-gray-700 text-gray-900 dark:text-white
-              focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+            className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-500 dark:focus:ring-gray-400"
             rows="2"
           />
-          <div className="flex justify-end gap-2 mt-2">
+          <div className="flex justify-end gap-2 mt-1">
             <button
               type="button"
               onClick={() => setShowReplyForm(false)}
@@ -147,8 +181,7 @@ const CommentItem = ({ comment, replies, onReply, onDelete, onReact }) => {
             </button>
             <button
               type="submit"
-              className="px-3 py-1 text-sm bg-gray-600 text-white rounded-lg 
-                hover:bg-gray-700 transition-colors cursor-pointer"
+              className="px-3 py-1 text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors cursor-pointer"
             >
               Reply
             </button>
@@ -156,11 +189,14 @@ const CommentItem = ({ comment, replies, onReply, onDelete, onReact }) => {
         </form>
       )}
 
+      {/* Nested Replies */}
       {replies?.map((reply) => (
         <CommentItem
           key={reply.$id}
           comment={reply}
-          replies={[]}
+          replies={reply.replies}
+          commentLangs={commentLangs} // pass the shared lang state
+          onSelectLang={onSelectLang}
           onReply={onReply}
           onDelete={onDelete}
           onReact={onReact}
@@ -170,6 +206,7 @@ const CommentItem = ({ comment, replies, onReply, onDelete, onReact }) => {
   );
 };
 
+// 🗨️ Comments component
 const Comments = ({ postId }) => {
   const { user } = useContext(AuthContext);
   const [comments, setComments] = useState([]);
@@ -177,12 +214,22 @@ const Comments = ({ postId }) => {
   const [loading, setLoading] = useState(false);
   const [postOwnerId, setPostOwnerId] = useState(null);
 
-  /* 🧠 Fetch post owner */
+  // { commentId: lang }
+  const [commentLangs, setCommentLangs] = useState({});
+
+  const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID;
+  const COMMENTS_COLLECTION_ID = import.meta.env.VITE_APPWRITE_COMMENTS_COLLECTION_ID;
+
+  const handleCommentLangChange = (commentId, lang) => {
+    setCommentLangs((prev) => ({ ...prev, [commentId]: lang }));
+  };
+
+  // Fetch post owner
   useEffect(() => {
     const fetchPostOwner = async () => {
       try {
         const post = await databases.getDocument(
-          import.meta.env.VITE_APPWRITE_DATABASE_ID,
+          DATABASE_ID,
           import.meta.env.VITE_APPWRITE_POSTS_COLLECTION_ID,
           postId
         );
@@ -191,10 +238,10 @@ const Comments = ({ postId }) => {
         console.error("❌ Error fetching post owner:", error);
       }
     };
-    fetchPostOwner();
-  }, [postId]);
+    if (postId) fetchPostOwner();
+  }, [postId, DATABASE_ID]);
 
-  /* 📄 Group comments into tree structure */
+  // Group comments into tree
   const groupComments = (docs) => {
     const map = {};
     const roots = [];
@@ -206,12 +253,12 @@ const Comments = ({ postId }) => {
     return roots;
   };
 
-  /* 📥 Fetch comments */
+  // Fetch comments
   const fetchComments = async () => {
     try {
       const res = await databases.listDocuments(
-        import.meta.env.VITE_APPWRITE_DATABASE_ID,
-        import.meta.env.VITE_APPWRITE_COMMENTS_COLLECTION_ID,
+        DATABASE_ID,
+        COMMENTS_COLLECTION_ID,
         [Query.equal("postId", postId), Query.orderAsc("$createdAt")]
       );
       setComments(groupComments(res.documents));
@@ -221,11 +268,11 @@ const Comments = ({ postId }) => {
   };
 
   useEffect(() => {
+    if (!postId) return;
     fetchComments();
 
-    /* 🔁 Real-time updates */
     const unsubscribe = client.subscribe(
-      `databases.${import.meta.env.VITE_APPWRITE_DATABASE_ID}.collections.${import.meta.env.VITE_APPWRITE_COMMENTS_COLLECTION_ID}.documents`,
+      `databases.${DATABASE_ID}.collections.${COMMENTS_COLLECTION_ID}.documents`,
       (response) => {
         if (
           response.events.some((e) => e.includes("create")) ||
@@ -238,28 +285,39 @@ const Comments = ({ postId }) => {
     );
 
     return () => unsubscribe();
-  }, [postId]);
+  }, [postId, DATABASE_ID, COMMENTS_COLLECTION_ID]);
 
-  /* ✏️ Add comment */
+  // Add new comment
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!user || !newComment.trim()) return;
-
     setLoading(true);
+
     try {
-      await databases.createDocument(
-        import.meta.env.VITE_APPWRITE_DATABASE_ID,
-        import.meta.env.VITE_APPWRITE_COMMENTS_COLLECTION_ID,
-        ID.unique(),
-        {
-          postId,
-          content: newComment,
-          authorId: user.$id,
-          authorEmail: user.email,
-          parentId: null,
-          reactions: [],
-        }
-      );
+      const commentId = ID.unique();
+      const createdAt = new Date().toISOString();
+
+      const [comment_ur, comment_hi, comment_es, comment_ar] = await Promise.all([
+        translateText(newComment, "Urdu"),
+        translateText(newComment, "Hindi"),
+        translateText(newComment, "Spanish"),
+        translateText(newComment, "Arabic"),
+      ]).catch(() => [null, null, null, null]);
+
+      await databases.createDocument(DATABASE_ID, COMMENTS_COLLECTION_ID, commentId, {
+        postId,
+        content: newComment,
+        comment_en: newComment,
+        comment_ur: comment_ur || "",
+        comment_hi: comment_hi || "",
+        comment_es: comment_es || "",
+        comment_ar: comment_ar || "",
+        authorId: user.$id,
+        authorEmail: user.email,
+        parentId: null,
+        reactions: [],
+        $createdAt: createdAt,
+      });
 
       if (postOwnerId && postOwnerId !== user.$id) {
         await createNotification(
@@ -271,36 +329,44 @@ const Comments = ({ postId }) => {
       }
 
       setNewComment("");
-    } catch (error) {
-      console.error("❌ Error adding comment:", error);
+      fetchComments();
+    } catch (err) {
+      console.error("❌ Error adding comment:", err);
     } finally {
       setLoading(false);
     }
   };
 
-  /* 💬 Reply */
+  // Reply
   const handleReply = async (parentId, content) => {
     if (!user || !content.trim()) return;
-    try {
-      const parentComment = await databases.getDocument(
-        import.meta.env.VITE_APPWRITE_DATABASE_ID,
-        import.meta.env.VITE_APPWRITE_COMMENTS_COLLECTION_ID,
-        parentId
-      );
+    setLoading(true);
 
-      await databases.createDocument(
-        import.meta.env.VITE_APPWRITE_DATABASE_ID,
-        import.meta.env.VITE_APPWRITE_COMMENTS_COLLECTION_ID,
-        ID.unique(),
-        {
-          postId,
-          content,
-          authorId: user.$id,
-          authorEmail: user.email,
-          parentId,
-          reactions: [],
-        }
-      );
+    try {
+      const parentComment = await databases.getDocument(DATABASE_ID, COMMENTS_COLLECTION_ID, parentId);
+      const replyId = ID.unique();
+
+      const [comment_ur, comment_hi, comment_es, comment_ar] = await Promise.all([
+        translateText(content, "Urdu"),
+        translateText(content, "Hindi"),
+        translateText(content, "Spanish"),
+        translateText(content, "Arabic"),
+      ]).catch(() => [null, null, null, null]);
+
+      await databases.createDocument(DATABASE_ID, COMMENTS_COLLECTION_ID, replyId, {
+        postId,
+        content,
+        comment_en: content,
+        comment_ur: comment_ur || "",
+        comment_hi: comment_hi || "",
+        comment_es: comment_es || "",
+        comment_ar: comment_ar || "",
+        authorId: user.$id,
+        authorEmail: user.email,
+        parentId,
+        reactions: [],
+        $createdAt: new Date().toISOString(),
+      });
 
       if (parentComment.authorId && parentComment.authorId !== user.$id) {
         await createNotification(
@@ -310,44 +376,33 @@ const Comments = ({ postId }) => {
           `/post/${postId}`
         );
       }
-    } catch (error) {
-      console.error("❌ Error adding reply:", error);
+
+      fetchComments();
+    } catch (err) {
+      console.error("❌ Error adding reply:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  /* ❌ Delete */
   const handleDelete = async (id) => {
     if (!confirm("Are you sure you want to delete this comment?")) return;
     try {
-      await databases.deleteDocument(
-        import.meta.env.VITE_APPWRITE_DATABASE_ID,
-        import.meta.env.VITE_APPWRITE_COMMENTS_COLLECTION_ID,
-        id
-      );
-    } catch (error) {
-      console.error("❌ Error deleting comment:", error);
+      await databases.deleteDocument(DATABASE_ID, COMMENTS_COLLECTION_ID, id);
+      fetchComments();
+    } catch (err) {
+      console.error("❌ Error deleting comment:", err);
     }
   };
 
-  /* ❤️ React */
   const handleReact = async (id, updatedReactions) => {
     try {
-      const emojiArray = Object.entries(updatedReactions).flatMap(([emoji, count]) =>
-        Array(count).fill(emoji)
+      const emojiArray = Object.entries(updatedReactions).flatMap(
+        ([emoji, count]) => Array(count).fill(emoji)
       );
 
-      await databases.updateDocument(
-        import.meta.env.VITE_APPWRITE_DATABASE_ID,
-        import.meta.env.VITE_APPWRITE_COMMENTS_COLLECTION_ID,
-        id,
-        { reactions: emojiArray }
-      );
-
-      const reactedComment = await databases.getDocument(
-        import.meta.env.VITE_APPWRITE_DATABASE_ID,
-        import.meta.env.VITE_APPWRITE_COMMENTS_COLLECTION_ID,
-        id
-      );
+      await databases.updateDocument(DATABASE_ID, COMMENTS_COLLECTION_ID, id, { reactions: emojiArray });
+      const reactedComment = await databases.getDocument(DATABASE_ID, COMMENTS_COLLECTION_ID, id);
 
       if (reactedComment.authorId && reactedComment.authorId !== user.$id) {
         await createNotification(
@@ -357,16 +412,17 @@ const Comments = ({ postId }) => {
           `/post/${postId}`
         );
       }
-    } catch (error) {
-      console.error("❌ Failed to update reaction:", error);
+
+      fetchComments();
+    } catch (err) {
+      console.error("❌ Failed to update reaction:", err);
     }
   };
 
   return (
     <div className="mt-8">
       <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-        <MessageSquare size={20} />
-        Comments
+        <MessageSquare size={20} /> Comments
       </h3>
 
       {user ? (
@@ -375,26 +431,21 @@ const Comments = ({ postId }) => {
             value={newComment}
             onChange={(e) => setNewComment(e.target.value)}
             placeholder="Write a comment..."
-            className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 
-              bg-white dark:bg-gray-700 text-gray-900 dark:text-white
-              focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400"
+            className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-500 dark:focus:ring-gray-400"
             rows="3"
           />
           <div className="flex justify-end mt-2">
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 
-                transition-colors disabled:opacity-50 cursor-pointer"
+              className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 cursor-pointer"
             >
               {loading ? "Posting..." : "Post Comment"}
             </button>
           </div>
         </form>
       ) : (
-        <p className="text-gray-600 dark:text-gray-400 mb-6">
-          Please log in to comment.
-        </p>
+        <p className="text-gray-600 dark:text-gray-400 mb-6">Please log in to comment.</p>
       )}
 
       <div className="space-y-6">
@@ -403,6 +454,8 @@ const Comments = ({ postId }) => {
             key={comment.$id}
             comment={comment}
             replies={comment.replies}
+            commentLangs={commentLangs} // shared lang state
+            onSelectLang={handleCommentLangChange}
             onReply={handleReply}
             onDelete={handleDelete}
             onReact={handleReact}

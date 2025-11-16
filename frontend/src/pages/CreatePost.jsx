@@ -3,6 +3,7 @@ import { databases, ID } from "../appwrite/appwriteConfig";
 import { AuthContext } from "../context/AuthContextValue";
 import { useNavigate } from "react-router-dom";
 import { Loader, PenSquare } from "lucide-react";
+import { translateText } from "../utils/geminiTranslate"; // your Gemini AI translation util
 
 const CreatePost = () => {
   const { user } = useContext(AuthContext);
@@ -32,26 +33,57 @@ const CreatePost = () => {
     setLoading(true);
 
     try {
-      const postId = ID.unique(); // unique ID for postId
-      const authorId = user.$id || user.id; // get logged-in user ID
-      const authorEmail = user.email; //
-      const createdAt = new Date().toISOString(); // current timestamp
+      const postId = ID.unique();
+      const authorId = user.$id;
+      const authorEmail = user.email;
+      const createdAt = new Date().toISOString();
 
-      await databases.createDocument(DATABASE_ID, COLLECTION_ID, postId, {
-        postId, // required field
-        authorId, // required field
-        author: authorEmail,
-        title,
-        content,
-        createdAt,
-        isPublished: true, 
-      });
+      // Generate translations using Gemini AI
+      const [
+        title_ur, content_ur,
+        title_hi, content_hi,
+        title_es, content_es,
+        title_ar, content_ar
+      ] = await Promise.all([
+        translateText(title, "Urdu"),
+        translateText(content, "Urdu"),
+        translateText(title, "Hindi"),
+        translateText(content, "Hindi"),
+        translateText(title, "Spanish"),
+        translateText(content, "Spanish"),
+        translateText(title, "Arabic"),
+        translateText(content, "Arabic"),
+      ]);
+      const truncate = (text, max = 255) => (text ? text.slice(0, max) : "");
+await databases.createDocument(
+  DATABASE_ID,
+  COLLECTION_ID,
+  postId,
+  {
+    postId,
+    authorId,
+    author: authorEmail,
+    title: truncate(title),
+    content,
+    title_ur: truncate(title_ur),
+    content_ur,
+    title_hi: truncate(title_hi),
+    content_hi,
+    title_es: truncate(title_es),
+    content_es,
+    title_ar: truncate(title_ar),
+    content_ar,
+    TranslationId: postId,
+    createdAt,
+    isPublished: true,
+  }
+);
 
-      alert("Post created successfully!");
+      alert("Post created successfully with translations!");
       navigate("/");
     } catch (error) {
-      console.error("Failed to create post:", error);
-      alert(`Something went wrong! ${error.message}`);
+      console.error(error);
+      alert("Failed to create post");
     } finally {
       setLoading(false);
     }
